@@ -36,6 +36,9 @@ class JavaWrapperAgent(ResourceAgent):
 	def get_context(self, content, headers, msg):
 		"""
 		determines information required to provide necessary context to the java dataset agent
+		
+		reaches back to resource repo to determine what is present in CI (to determine what must be appended/updated)
+		(for now return the Service which must be updated; not concerned with data parts which must be updated)
 		"""
 		defer.returnValue(msg, 'Not Implemented')
 
@@ -60,6 +63,7 @@ class JavaWrapperAgent(ResourceAgent):
 	@defer.inlineCallbacks
 	def op_get_update(self, content, headers, msg):
 		"""
+		Replace with op_data_message()..   gets called repeatedly by the underlying java dataset agent to stream data back to this wrapper agent.
 		Perform the update - send rpc message to dataset agent providing context from op_get_context.  Agent response will be the dataset or an error.
 		"""
 		yield self.reply_err(msg, 'Not Implemented')
