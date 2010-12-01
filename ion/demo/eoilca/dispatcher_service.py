@@ -2,8 +2,8 @@
 """
 Created on Nov 9, 2010
 
-@file:   ion/play/dispatcher_service.py
-@author: tlarocque
+@file:   ion/demo/eoilca/dispatcher_service.py
+@author: Tim LaRocque
 @brief:  Dispatching service for starting remote processes for data assimilation/processing on changes to availability of data
 """
 
@@ -232,12 +232,12 @@ class DispatcherServiceClient(ServiceClient):
     
     @defer.inlineCallbacks
     def notify(self, source='test1'):
-        """
+        '''
         Dispatches a change notification for the given 'source' to the
         DispatcherService.  When the DispatcherService is notified that
         there have been changes to a source, it, in turn, dispatches a
         request to start any scripts associated with that source.
-        """
+        '''
         yield self._check_init()
         (content, headers, msg) = yield self.rpc_send('notify', source)
         defer.returnValue(content)
