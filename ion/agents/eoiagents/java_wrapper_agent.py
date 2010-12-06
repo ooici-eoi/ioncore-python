@@ -37,7 +37,9 @@ class JavaWrapperAgent(ServiceProcess):
         '''
         # Step 1: Delegate initialization to parent "ServiceProcess"
         log.info('Initializing class instance')
-        ServiceProcess.__init__(self, spawnargs={"proc-name": __name__ + ".JavaWrapperAgent"}, *args, **kwargs)
+        log.info('proc-name: ' + __name__ + '.JavaWraperAgent')
+        #ServiceProcess.__init__(self, spawnargs={'proc-name': __name__ + '.JavaWrapperAgent'}, *args, **kwargs)
+        ServiceProcess.__init__(self, *args, **kwargs)
         
         # Step 2: Create class attributes (is this needed?)
         self.__agent_phandle = None
@@ -47,14 +49,35 @@ class JavaWrapperAgent(ServiceProcess):
         self.__agent_spawn_args = None
         
         # Step 3: Setup the dataset context dictionary (to simulate acquiring context from the dataset registry)
-        self.__dataset_context_dict = {"sos":{"id":"SOS",
+        self.__dataset_context_dict = {"sos_station_st":{"id":"SOS",
                                               "callback":"data_message_callback",
                                               "base_url":"http://sdf.ndbc.noaa.gov/sos/server.php?",
-                                              "start_time":"2009-09-01T00:00:00Z",
-                                              "end_time":"2009-09-05T00:00:00Z",
+                                              "start_time":"2008-08-01T00:00:00Z",
+                                              "end_time":"2008-08-02T00:00:00Z",
                                               "property":"sea_water_temperature",
-                                              "stationId":"41013"},
-                                       "usgs":{"id":"USGS"}}
+                                              "stationId":"41012"},
+                                        "sos_station_sal":{"id":"SOS",
+                                              "callback":"data_message_callback",
+                                              "base_url":"http://sdf.ndbc.noaa.gov/sos/server.php?",
+                                              "start_time":"2008-08-01T00:00:00Z",
+                                              "end_time":"2008-08-02T00:00:00Z",
+                                              "property":"salinity",
+                                              "stationId":"41012"},
+                                        "sos_glider_st":{"id":"SOS",
+                                              "callback":"data_message_callback",
+                                              "base_url":"http://sdf.ndbc.noaa.gov/sos/server.php?",
+                                              "start_time":"2010-07-26T00:00:00Z",
+                                              "end_time":"2010-07-27T00:00:00Z",
+                                              "property":"sea_water_temperature",
+                                              "stationId":"48900"},
+                                        "sos_glider_sal":{"id":"SOS",
+                                              "callback":"data_message_callback",
+                                              "base_url":"http://sdf.ndbc.noaa.gov/sos/server.php?",
+                                              "start_time":"2010-07-26T00:00:00Z",
+                                              "end_time":"2010-07-27T00:00:00Z",
+                                              "property":"salinity",
+                                              "stationId":"48900"},
+                                        "usgs":{"id":"USGS"}}
         
     @defer.inlineCallbacks
     def slc_init(self):
@@ -135,8 +158,12 @@ class JavaWrapperAgent(ServiceProcess):
         Replace with op_data_message()..   gets called repeatedly by the underlying java dataset agent to stream data back to this wrapper agent.
         Perform the update - send rpc message to dataset agent providing context from op_get_context.  Agent response will be the dataset or an error.
         """
-        log.info("<<<---@@@ Receiving incoming data stream... (first 100 characters)")
         # @todo: pass this message up to the eoi ingest service
+        #log.info("<<<---@@@ Receiving incoming data stream...")
+        #log.info("...Headers\t" + str(headers))
+        #(content, headers, msg) = yield self.rpc_send('ingest', content)
+        #log.info("Returned OOI DatasetID: " + str(content))
+        
         return True
         
     
@@ -275,7 +302,8 @@ class JavaWrapperAgent(ServiceProcess):
 
     def _init_agent_spawn_args(self):
         # @todo: Generate jar_pathname dynamically
-        jar_pathname = "/Users/tlarocque/Development/Java/Workspace_eclipse/EOI_dev/build/TryAgent.jar"   # STAR #
+        # jar_pathname = "/Users/tlarocque/Development/Java/Workspace_eclipse/EOI_dev/build/TryAgent.jar"   # STAR #
+        jar_pathname = "res/apps/eoi_test/TryAgent.jar"   # STAR #
         hostname = self.container.exchange_manager.message_space.connection.hostname
         exchange = self.container.exchange_manager.exchange_space.name
         wrapper = self.get_scoped_name("system", str(self.declare['name']))      # validate that 'system' is the correct scope
@@ -343,8 +371,8 @@ from ion.agents.eoiagents.java_wrapper_agent import JavaWrapperAgent, JavaWrappe
 from ion.agents.eoiagents.java_wrapper_agent import JavaWrapperAgent, JavaWrapperAgentClient; client = JavaWrapperAgentClient(); agent = JavaWrapperAgent(); agent.spawn();
 client.rpc_terminate()
 
-#  :Send update request for the dataset 'sos'
-client.update_request('sos')
+#  :Send update request for the dataset 'sos_station_st'
+client.rpc_request_update('sos_station_st')
 
 
 '''
