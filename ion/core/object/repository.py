@@ -8,7 +8,6 @@
 @author Matt Rodriguez
 
 TODO
-Create exception class and move stuff to a object utils module
 Make sure delete works for these objects the way we expect!
 
 """
@@ -112,6 +111,9 @@ class Repository(object):
 
         if head:
             self._dotgit = self._load_element(head)
+            # Set it to modified and give it a new ID as soon as we get it!
+            self._dotgit.Modified = True
+            self._dotgit.MyId = self.new_id()
         else:
            
             self._dotgit = self.create_wrapped_object(mutable_pb2.MutableNode, addtoworkspace = False)
@@ -120,6 +122,14 @@ class Repository(object):
         A specially wrapped Mutable GPBObject which tracks branches and commits
         It is not 'stored' in the index - it lives in the workspace
         """
+    
+    def __repr__(self):
+        output  = '============== Repository (status: %s) ==============\n' % self.status
+        output += str(self._dotgit) + '\n'
+        output += '============== Root Object ==============\n'
+        output += str(self._workspace_root) + '\n'
+        output += '============ End Resource ============\n'
+        return output
     
     @property
     def repository_key(self):
@@ -273,10 +283,13 @@ class Repository(object):
                 cref = self.merge_by_date(branch)
                 
         # Do some clean up!
+        for item in self._workspace.itervalues():
+            #print 'ITEM',item
+            item.Invalidate()
         self._workspace = {}
         self._workspace_root = None
             
-        # Automatically fetch the object from the hashed dictionary or fetch if needed!
+        # Automatically fetch the object from the hashed dictionary
         rootobj = cref.objectroot
         self._workspace_root = rootobj
         
@@ -353,11 +366,13 @@ class Repository(object):
             return
         
         if len(self._current_branch.commitrefs)==0:
-            raise Exception, 'This current branch is empty - there is nothing to reset too!!'
+            raise RepositoryError('This current branch is empty - there is nothing to reset too!')
         
         cref = self._current_branch.commitrefs[0]
         
         # Do some clean up!
+        for item in self._workspace:
+            item.Invalidate()
         self._workspace = {}
         self._workspace_root = None
             
@@ -418,9 +433,9 @@ class Repository(object):
             date = pu.currenttime()
             
         cref.date = date
-        
+            
         branch = self._current_branch
-
+            
         # If this is the first commit to a new repository the current branch is a dummy
         # If it is initialized it is real and we need to link to it!
         if len(branch.commitrefs)==1:
@@ -436,6 +451,7 @@ class Repository(object):
             # This is a new branch and we must add a place for the commit ref!
             branch.commitrefs.add()
         
+        
         # For each branch that we merged from - add a  reference
         for mrgd in self._merged_from:
             pref = cref.parentrefs.add()
@@ -450,7 +466,6 @@ class Repository(object):
         branch.commitrefs.SetLink(0,cref)
         
         return cref
-    
             
         
     def merge(self, branch=None, commit_id = None, older_than=None):
@@ -485,6 +500,12 @@ class Repository(object):
         ## Need to check and then clear the workspace???
         #if not self.status == self.UPTODATE:
         #    raise Exception, 'Can not create new branch while the workspace is dirty'
+        
+        if self._current_branch != None and len(self._current_branch.commitrefs)==0:
+            # Unless this is an uninitialized repository it is an error to create
+            # a new branch from one which has no commits yet...
+            raise RepositoryError('The current branch is empty - a new one can not be created untill there is a commit!')
+        
         
         brnch = self.branches.add()    
         brnch.branchkey = pu.create_guid()
@@ -558,12 +579,16 @@ class Repository(object):
         obj._root = obj
         obj._parent_links = set()
         obj._child_links = set()
+        obj._derived_wrappers={}
         obj._read_only = False
         obj._myid = obj_id
-        obj._modified = True     
+        obj._modified = True
+        obj._invalid = False
 
         if addtoworkspace:
             self._workspace[obj_id] = obj
+            
+        obj._activated=True
             
         return obj
         
@@ -584,10 +609,19 @@ class Repository(object):
             return None
                 
         if self._workspace.has_key(link.key):
-            return self._workspace.get(link.key)
+            
+            obj = self._workspace.get(link.key)
+            # Make sure the 
+            #self.set_linked_object(link, obj)
+            obj.AddParentLink(link)
+            return obj
 
         elif self._commit_index.has_key(link.key):
-            return self._commit_index.get(link.key)
+            # The commit object will be missing its parent links.
+            # Is that a problem?
+            obj = self._commit_index.get(link.key)
+            obj.AddParentLink(link)
+            return obj
 
         elif self._hashed_elements.has_key(link.key):
             
@@ -599,6 +633,10 @@ class Repository(object):
                 raise RepositoryError('The link type does not match the element type found!')
             
             obj = self._load_element(element)
+            
+            # For objects loaded from the hash the parent child relationship must be set
+            #self.set_linked_object(link, obj)
+            obj.AddParentLink(link)
             
             if obj.GPBType == self.CommitClassType:
                 self._commit_index[obj.MyId]=obj
@@ -613,21 +651,28 @@ class Repository(object):
             raise RepositoryError('Object not in workbench! You must pull the leaf elements!')
             #return self._workbench.fetch_linked_objects(link)
             
-    def _load_links(self, obj, loadleaf=False):
+    def _load_links(self, obj):
         """
         Load the child objects into the work space
-        """        
-        if loadleaf:
-            
-            for link in obj.ChildLinks:
-                child = self.get_linked_object(link)  
-                self._load_links(child, loadleaf=loadleaf)
-        else:
-            for link in obj.ChildLinks:
+        """
+        for link in obj.ChildLinks:
+            child = self.get_linked_object(link)  
+            self._load_links(child)
                 
-                if not link.isleaf:
-                    child = self.get_linked_object(link)      
-                    self._load_links(child, loadleaf=loadleaf)
+        #if loadleaf:
+        #    
+        #    for link in obj.ChildLinks:
+        #        child = self.get_linked_object(link)  
+        #        self._load_links(child, loadleaf=loadleaf)
+        #else:
+        #    for link in obj.ChildLinks:
+        #        
+        #        # If a leaf object is referenced by more than one parent it must
+        #        # be loaded so that both parents can be modified
+        #        if not link.isleaf:
+        #            child = self.get_linked_object(link)      
+        #            self._load_links(child, loadleaf=loadleaf)
+                
         
         
             
@@ -645,11 +690,16 @@ class Repository(object):
         # Do not automatically load it into a particular space...
         obj = self.create_wrapped_object(cls, obj_id=element.key, addtoworkspace=False)
             
-        obj.ParseFromString(element.value)
-        
-        # If it is not a leaf element - find its child links
-        if not element.isleaf:
+        # If it is a leaf element set the bytes for the object, do not load it
+        # If it is not a leaf element load it and find its child links
+        if element.isleaf:
+            
+            obj._bytes = element.value
+            
+        else:
+            obj.ParseFromString(element.value)
             obj.FindChildLinks()
+
 
         obj.Modified = False
         
@@ -701,60 +751,50 @@ class Repository(object):
         
         
         
-    def set_linked_object(self,field, value):        
+    def set_linked_object(self,link, value):        
         # If it is a link - set a link to the value in the wrapper
-        if field.GPBType == field.LinkClassType:
-            
-            #@Todo Change assertions to Exceptions?
-            
-            if not value.IsRoot == True:
-                raise RepositoryError('You can not set a link equal to part of a gpb composite!')
-            
-            if field.InParents(value):
-                raise RepositoryError('You can not create a recursive structure - this value is also a parent of the link you are setting.')
-            
-            
-            #Make sure the link is in the objects set of child links
-            field.ChildLinks.add(field) # Adds to the fields root wrapper!
-            value.ParentLinks.add(field) 
-            
-            # If the link is currently set
-            if field.key:
-                                
-                if field.key == value.MyId:
-                    # Setting it again is a pass...
-                    return
-                
-                
-                old_obj = self._workspace.get(field.key,None)
-                if old_obj:
-                    plinks = old_obj.ParentLinks
-                    plinks.remove(field.key)
-                    # If there are no parents left for the object delete it
-                    if len(plinks)==0:
-                        del self._workspace[field.key]
+        if link.GPBType != link.LinkClassType:
+            raise RepositoryError('Can not set a composite field unless it is of type Link')
                     
+        if not value.IsRoot == True:
+            raise RepositoryError('You can not set a link equal to part of a gpb composite!')
+        
+        if link.key == value.MyId:
+                # Add the new link to the list of parents for the object
+                value.AddParentLink(link) 
+                # Setting it again is a pass...
+                return
+        
+        if link.InParents(value):
+            raise RepositoryError('You can not create a recursive structure - this value is also a parent of the link you are setting.')
+
+        # Add the new link to the list of parents for the object
+        value.AddParentLink(link) 
+        
+        # If the link is currently set
+        if link.key:
+                            
+            old_obj = self._workspace.get(link.key,None)
+            if old_obj:
+                plinks = old_obj.ParentLinks
+                plinks.remove(link)
+                # If there are no parents left for the object delete it
+                if len(plinks)==0:
+                    del self._workspace[link.key]
                 
-                # Modify the existing link
-                field.key = value.MyId
-                
-                # Set the new type
-                tp = field.type
-                self._set_type_from_obj(tp, value)
-                    
-            else:
-                
-                # Set the id of the linked wrapper
-                field.key = value.MyId
-                
-                # Set the type
-                tp = field.type
-                self._set_type_from_obj(tp, value)
                 
         else:
             
-            raise RepositoryError('Can not set a composite field unless it is of type Link')
-            #Over ride Protobufs - I want to be able to set a message directly
-        #    field.CopyFrom(value)
+            #Make sure the link is in the objects set of child links
+            link.ChildLinks.add(link) # Adds to the links root wrapper!
+            
         
             
+        # Set the id of the linked wrapper
+        link.key = value.MyId
+        
+        # Set the type
+        tp = link.type
+        self._set_type_from_obj(tp, value)
+            
+    

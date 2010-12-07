@@ -176,25 +176,34 @@ class DataStoreTest(IonTestCase):
         # Now modify and commit on both data stores! - Divergence!
             
         pa2 = ab2.owner
-        pa2.email = 'process2@gmail.com'
             
+        self.assertEqual(pa2.email,'d@s.com')
+            
+        pa2.email = 'process2@gmail.com'
         # Show off that it changed in both places - it is a real DAG!
         self.assertIdentical(ab2.owner, ab2.person[0])
         # Commit on repo2    
         repo2.commit()
+        self.assertEqual(pa2.email,'process2@gmail.com')
+        
             
         # wait one second to make sure that the commits can be sorted by time stamp
         yield pu.asleep(1)
+        
+        self.assertEqual(pa1.email,'d@s.com')
         # Modify repo1
         pa1.email = 'process1@gmail.com'
         repo1.commit()
-            
+        
+        self.assertEqual(pa1.email,'process1@gmail.com')
             
         response, ex = yield proc_ds2.push('ps1',repo_key)
             
         self.assertEqual(response, proc_ds2.ION_SUCCESS)
             
         # Assert that the Divergence was recorded!
+        repo1.log_commits('master')
+        
         self.assertEqual(len(repo1.branches[0].commitrefs),2)
             
         # Merge on Read
@@ -282,6 +291,31 @@ class DataStoreTest(IonTestCase):
         ab_2 = repo_ds2.checkout('master')
         
         self.assertEqual(ab_2, ab)
+        
+        ab_2.person[1].name = 'Not John'
+        
+        repo_ds2.commit('Modify and pull it back!')
+        
+        response, ex = yield proc_ds1.pull('ps2',repo_ds2.repository_key)
+        
+        self.assertEqual(response, proc_ds1.ION_SUCCESS)
+        
+        self.assertNotIn(repo._dotgit.MyId, repo._workspace)
+        
+        ab = repo.checkout('master')
+        
+        print 'DS1:'
+        print str(repo)
+        
+        print 'DS2:'
+        print str(repo_ds2)
+        
+        
+        self.assertEqual(repo_ds2._dotgit, repo._dotgit)
+        self.assertEqual(ab_2, ab)
+        
+        
+        
 
 
     @defer.inlineCallbacks

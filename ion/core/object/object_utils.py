@@ -49,3 +49,17 @@ def set_type_from_obj(obj):
     gpbtype.cls = obj.DESCRIPTOR.name
     
     return gpbtype
+
+
+
+def create_type_identifier(package='', protofile='', cls=''):
+    """
+    This returns an unwrapped GPB object to the application level
+    """        
+    gpbtype = type_pb2.GPBType()
+        
+    gpbtype.protofile = protofile
+    gpbtype.package = package
+    gpbtype.cls = cls
+        
+    return gpbtype
