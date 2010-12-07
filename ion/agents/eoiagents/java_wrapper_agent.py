@@ -127,10 +127,11 @@ class JavaWrapperAgent(ServiceProcess):
         # @todo: this should ultimately be an RPC send which replies when the update is complete, just before data is pushed back
         log.info("@@@--->>> Sending update request to Dataset Agent with context...")
         log.info("..." + str(context))
-        yield self.send(self.agent_binding, self.agent_update_op, context)
+        (content, headers, msg1) = yield self.rpc_send(self.agent_binding, self.agent_update_op, context)
         
         # @todo: change reply based on response of the RPC send
-        yield self.reply_ok(msg, {"value":"Successfully dispatched update request"}, {})
+        # yield self.reply_ok(msg, {"value":"Successfully dispatched update request"}, {})
+        yield self.reply_ok(msg, {"value":"OOI DatasetID:" + str(content)}, {})
     
     @defer.inlineCallbacks
     def op_result(self, content, headers, msg):
