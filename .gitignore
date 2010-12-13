@@ -44,3 +44,4 @@ ion/agents/instrumentagents copy/test/test_instrument.py
 .gitignore
 
 /res/apps/eoi_test/
+/res/apps/ooi2unidata/
