@@ -21,7 +21,9 @@ log = ion.util.ionlog.getLogger(__name__)
 
 class JavaWrapperAgent(ServiceProcess):
     """
-    Class designed to facilitate tight interaction with ION in leu of a complete Java CC, including:
+    Class designed to facilitate (Java) Dataset Agent's tight interaction with ION in
+    lieu of an incomplete Java CC.  Wrapping Java Agents in Python processes in this way
+    provides the following functionality:
     Agent registration, process lifecycle, and reactivity to other core ION services
     """
     
@@ -33,7 +35,7 @@ class JavaWrapperAgent(ServiceProcess):
         
     def __init__(self, *args, **kwargs):
         '''
-        TODO: document this
+        Initialize the JavaWrapperAgent instance, init instance fields, etc.
         '''
         # Step 1: Delegate initialization to parent "ServiceProcess"
         log.info('Initializing class instance')
@@ -83,7 +85,8 @@ class JavaWrapperAgent(ServiceProcess):
     @defer.inlineCallbacks
     def slc_init(self):
         '''
-        TODO: document this
+        Initialization upon Service spawning.  This life-cycle process, in-turn, spawns the
+        Java Dataset Agent which this class is intended to wrap.
         '''
         # Step 1: Delegate initialization to parent class
         yield defer.maybeDeferred(ServiceProcess.slc_init, self)
@@ -94,7 +97,8 @@ class JavaWrapperAgent(ServiceProcess):
     @defer.inlineCallbacks
     def slc_terminate(self):
         '''
-        TODO: document this
+        Termination life cycle process.  This affect also terminates the Java Dataset Agent which
+        this class is intended to wrap.
         '''
         # Step 1: Terminate the underlying dataset agent
         yield self._terminate_dataset_agent()
@@ -105,12 +109,14 @@ class JavaWrapperAgent(ServiceProcess):
     @defer.inlineCallbacks
     def op_update_request(self, content, headers, msg):
         '''
-        scheduler requests an update, provides the resource_id
-        depending on state, may or may not call:
-        spawn_dataset_agent
-        then will always call:
-        get_context
-        get_update
+        Responds to the Scheduler Service's request for update by having the wrapped Dataset Agent
+        perform an update and push the compliant data into the Resource Registry.
+        This process involves:
+            1) Requesting the datasources current state (known as "context") from the Resource Registry
+            2) The update procedure is invoked via an RPC call to the underlying Dataset Agent using
+               the acquired "context"
+            3) The Dataset Agent performs the update assimilating data into CDM/CF compliant form,
+               pushes that data to the Resource Registry, and returns the new DatasetID. 
         '''
         log.debug("Entered op_update_request(datasetID=%s)" % (str(content)))
         
@@ -138,7 +144,7 @@ class JavaWrapperAgent(ServiceProcess):
     @defer.inlineCallbacks
     def op_result(self, content, headers, msg):
         '''
-        Temporary op to catch RPC reply messages which are not well-formed
+        Temporary op to catch RPC reply messages which are not well-formed (incoming from the Java Dataset Agent)
         '''
         log.debug("<<<---@@@ Incoming RPC reply from Dataset Agent...")
         log.debug("...Content:\t" + str(content))
@@ -147,6 +153,10 @@ class JavaWrapperAgent(ServiceProcess):
         defer.returnValue("ok")
     
     def op_binding_key_callback(self, content, headers, msg):
+        '''
+        Caches the given binding_key for future communication between the JavaWrapperAgent and its underlying
+        Java Dataset Agent.  This method is invoked remotely from the Dataset Agent during its initialization.
+        '''
         log.info("<<<---@@@ Incoming callback with binding key message")
         log.debug("...Content:\t" + str(content))
         log.debug("...Headers\t" + str(headers))
@@ -158,8 +168,7 @@ class JavaWrapperAgent(ServiceProcess):
     
     def op_data_message_callback(self, content, headers, msg):
         """
-        Replace with op_data_message()..   gets called repeatedly by the underlying java dataset agent to stream data back to this wrapper agent.
-        Perform the update - send rpc message to dataset agent providing context from op_get_context.  Agent response will be the dataset or an error.
+        Currently UNUSED.  Intented purpose has expired.  This method may be removed in future release.
         """
         # @todo: pass this message up to the eoi ingest service
         #log.info("<<<---@@@ Receiving incoming data stream...")
@@ -173,8 +182,8 @@ class JavaWrapperAgent(ServiceProcess):
     @defer.inlineCallbacks
     def _spawn_dataset_agent(self):
         '''
-        Instantiates the java dataset agent including providing appropriate connectivity information so the agent can establish messaging channels
-        @param timeout The length of time in seconds to wait for receipt of the dataset agent's binding key after it is spawned
+        Instantiates the Java Dataset Agent including providing appropriate connectivity information so the agent can establish messaging channels
+        @param: timeout The length of time in seconds to wait for receipt of the dataset agent's binding key after it is spawned
         '''
         log.debug("Spawning dataset agent")
         if self.is_agent_initialized():
@@ -201,6 +210,9 @@ class JavaWrapperAgent(ServiceProcess):
         
     @defer.inlineCallbacks
     def _terminate_dataset_agent(self):
+        '''
+        Terminates the underlying dataset by sending it a 'terminate' message and waiting for the (OS) process's returncode.  
+        '''
         # TODO: add a timeout to this methods signature
         # @todo: this method does not functionaly comply with documentation.  See "Dataset Agent Interface Notes"
         #        to add necessary functionlity.
@@ -215,7 +227,7 @@ class JavaWrapperAgent(ServiceProcess):
 #            log.debug("...Content:\t" + str(content))
 #            log.debug("...Headers\t" + str(headers))
 #            log.debug("...Message\t" + str(msg))
-            log.info("@@@--->>> Sending terminating request to underlying Dataset Agent")
+            log.info("@@@--->>> Sending termination request to underlying Dataset Agent")
             yield self.send(self.agent_binding, self.agent_term_op, None)
             
             
@@ -247,10 +259,11 @@ class JavaWrapperAgent(ServiceProcess):
            
     def _get_dataset_context(self, datasetID):
         '''
-        determines information required to provide necessary context to the java dataset agent
-        
-        reaches back to resource repo to determine what is present in CI (to determine what must be appended/updated)
-        (for now return the Service which must be updated; not concerned with data parts which must be updated)
+        Requests the current state of the given datasetID from the Resource Registry and returns that state as
+        "context" for future update procedures.
+
+        (For the purposes of elaboration this method simply returns a cached context from a dictionary which has
+        been keyed to the given datasetID; communication with the Resource Registry does NOT occur)
         '''
         log.debug("Entered _get_dataset_context(datasetID=%s)" % (datasetID))
         if (datasetID in self.__dataset_context_dict):
@@ -260,12 +273,25 @@ class JavaWrapperAgent(ServiceProcess):
 
 
     def is_agent_initialized(self):
+        '''
+        @return: True if this agent is initialized.  This agent is initialized when it has spawned its underlying
+        Dataset Agent via slc_init()
+        '''
         return self.agent_phandle != None
     
     def is_agent_active(self):
+        '''
+        @return: True if this agent is active.  This agent is active when it has spawned its underlying
+        Dataset Agent via slc_init() and that agent has responded.  Essentially, a JavaWrapperAgent is active,
+        when communication channels between it and the agent it is wrapping, have been established.
+        '''
         return self.is_agent_initialized() and self.agent_binding != None
     
     def is_agent_activating(self):
+        '''
+        Returns True if this agent is currently activating.  This agent is activating when it has been initialized
+        but the underlying dataset agent has not yet responded.
+        '''
         return self.is_agent_initialized() and not self.is_agent_active()
 
     @property
@@ -289,6 +315,10 @@ class JavaWrapperAgent(ServiceProcess):
 
     @property
     def agent_spawn_args(self):
+        '''
+        @return: a list of arguments which can be passed to subprocess.Popen() to spawn this JavaWrapperAgent's
+        underlying Dataset Agent.
+        '''
         # Lazy-initialize the spawn arguments
         if (self.__agent_spawn_args == None):
             self._init_agent_spawn_args()
@@ -296,6 +326,9 @@ class JavaWrapperAgent(ServiceProcess):
 
     @property
     def agent_update_op(self):
+        '''
+        @return: the name of the RPC operation used by the Java Dataset Agent for performing a dataset update.
+        '''
         # Lazy-initialize the update operation name
         if (self.__agent_updt_op == None):
             self._init_agent_update_op()
@@ -303,12 +336,18 @@ class JavaWrapperAgent(ServiceProcess):
 
     @property
     def agent_term_op(self):
+        '''
+        @return: the name of the RPC operation used by the Java Dataset Agent for performing self-termination.
+        '''
         # Lazy-initialize the terminate operation name
         if (self.__agent_term_op == None):
             self._init_agent_term_op()
         return self.__agent_term_op
 
     def _init_agent_spawn_args(self):
+        '''
+        Lazy-initializes self.__agent_spawn_args
+        '''
         # @todo: Generate jar_pathname dynamically
         # jar_pathname = "/Users/tlarocque/Development/Java/Workspace_eclipse/EOI_dev/build/TryAgent.jar"   # STAR #
         jar_pathname = "res/apps/eoi_test/TryAgent.jar"   # STAR #
@@ -323,12 +362,18 @@ class JavaWrapperAgent(ServiceProcess):
         self.__agent_spawn_args = result
     
     def _init_agent_update_op(self):
+        '''
+        Lazy-initializes self.__agent_updt_op
+        '''
         # @todo: Acquiring the shutdown op may need to be dynamic in the future
         updt_op= "op_update"
         log.debug("Acquired Dataset Agent update op: %s" % (updt_op))
         self.__agent_updt_op = updt_op
 
     def _init_agent_term_op(self):
+        '''
+        Lazy-initializes self.__agent_term_op
+        '''
         # @todo: Acquiring the shutdown op may need to be dynamic in the future
         term_op= "op_shutdown"
         log.debug("Acquired Dataset Agent terminate op: %s" % (term_op))
@@ -337,7 +382,7 @@ class JavaWrapperAgent(ServiceProcess):
 
 class JavaWrapperAgentClient(ServiceClient):
     """
-    Client for direct (RPC) interaction with the JavaWrapperAgent ServiceProcess
+    Test client for direct (RPC) interaction with the JavaWrapperAgent ServiceProcess
     """
     
     def __init__(self, *args, **kwargs):
@@ -347,7 +392,7 @@ class JavaWrapperAgentClient(ServiceClient):
     @defer.inlineCallbacks
     def rpc_request_update(self, datasetId):
         '''
-        TODO:
+        Simulates an update request to the JavaWrapperAgent as if from the Scheduler Service
         '''
         # Ensure a Process instance exists to send messages FROM...
         #   ...if not, this will spawn a new default instance.
@@ -373,14 +418,10 @@ factory = ProcessFactory(JavaWrapperAgent)
 # Copy/paste startup:
 #---------------------#
 #  :spawn an agent
-from ion.agents.eoiagents.java_wrapper_agent import JavaWrapperAgent, JavaWrapperAgentClient; agent = JavaWrapperAgent(); agent.spawn();
-
-#  :spawn and immediately terminate an agent 
-from ion.agents.eoiagents.java_wrapper_agent import JavaWrapperAgent, JavaWrapperAgentClient; client = JavaWrapperAgentClient(); agent = JavaWrapperAgent(); agent.spawn();
-client.rpc_terminate()
+from ion.agents.eoiagents.java_wrapper_agent import JavaWrapperAgent jwa, JavaWrapperAgentClient as jwac; agent = jwa(); agent.spawn(); aclient = jwac();
 
 #  :Send update request for the dataset 'sos_station_st'
-client.rpc_request_update('sos_station_st')
+aclient.rpc_request_update('sos_station_st')
 
 
 '''

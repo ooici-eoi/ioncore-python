@@ -3,12 +3,14 @@ Created on Nov 30, 2010
 
 @file:   ion/demo/eoilca/eoi_simulator.py
 @author: tlarocque
-@brief:  A client created for the EOI R1 LCA demo which simulates actions on EOI services
-         from OOICI components which may or may not be implemented at the time of the demo.
-         For example: this client is used to simulate an "update event" signaled from the Scheduler Service to initiate
-                      the dataset update sequence in the JavaWrapperAgent (ion.agents.eoiagents.java_wrapper_agent.py).
-                      This class is also used to simulate notifications to the dispatcher_service (ion/demo/eoilca/dispatcher_service.py)
-                      which signal it to invoke scripts that retrieve and reconstitute datasets from OOICI. 
+@brief:  xxx A client created for the EOI R1 LCA demo which simulates actions on EOI services
+         xxx from OOICI components which may or may not be implemented at the time of the demo.
+         xxx For example: this client is used to simulate an "update event" signaled from the Scheduler Service to initiate
+         xxx              the dataset update sequence in the JavaWrapperAgent (ion.agents.eoiagents.java_wrapper_agent.py).
+         xxx              This class is also used to simulate notifications to the dispatcher_service (ion/demo/eoilca/dispatcher_service.py)
+         xxx              which signal it to invoke scripts that retrieve and reconstitute datasets from OOICI.
+         
+         -- This class is no longer used and has been preserved for future use (if at all) 
 '''
 
 import ion.util.ionlog
