@@ -49,6 +49,7 @@ class JavaWrapperAgent(ServiceProcess):
         self.__agent_spawn_args = None
         
         # Step 3: Setup the dataset context dictionary (to simulate acquiring context from the dataset registry)
+        # @todo: remove 'callbck', it is no longer used
         self.__dataset_context_dict = {"sos_station_st":{"id":"SOS",
                                               "callback":"data_message_callback",
                                               "base_url":"http://sdf.ndbc.noaa.gov/sos/server.php?",
@@ -113,6 +114,7 @@ class JavaWrapperAgent(ServiceProcess):
         '''
         log.debug("Entered op_update_request(datasetID=%s)" % (str(content)))
         
+        # @todo: this check should be abstracted into a method so that all ops may process in the same manner.
         if (not self.is_agent_active()):
             yield self.reply_err(msg, "Dataset agent is not yet active.  Cannot fulfill update request for: " + str(content))
             defer.returnValue(None)
@@ -179,9 +181,12 @@ class JavaWrapperAgent(ServiceProcess):
             log.warn("External dataset agent is already spawned with PID: %s.  Agent will NOT be respawned." % (str(self.agent_phandle.pid)))
             defer.returnValue(self.agent_phandle.pid)
         
-        # Step 1: Start the Dataset Agent (java) passing necessary spawn arguments
+        # Step 1: Acquire the dataset spawn arguments
+        args = self.agent_spawn_args
+        
+        # Step 2: Start the Dataset Agent (java) passing necessary spawn arguments
         try:
-            proc = subprocess.Popen(self.agent_spawn_args)
+            proc = subprocess.Popen(args)
         except ValueError, ex:
             #log.error("Received invalid spawn arguments: " + str(ex))
             raise RuntimeError("JavaWrapperAgent._spawn_agent(): Received invalid spawn arguments form JavaWrapperAgent.agent_spawn_args" + str(ex))
@@ -189,7 +194,7 @@ class JavaWrapperAgent(ServiceProcess):
             #log.error("Dataset agent raised exception on spawning: " + str(ex))
             raise RuntimeError("Failed to spawn the external Dataset Agent")
 
-        # Step 2: Maintain a reference to the subprocess object (Popen) for later communication
+        # Step 3: Maintain a reference to the subprocess object (Popen) for later communication
         log.info("Started external Dataset Agent with PID: '%d'" % (proc.pid))
         self.__agent_phandle = proc
         defer.returnValue(self.agent_phandle.pid)
@@ -197,6 +202,8 @@ class JavaWrapperAgent(ServiceProcess):
     @defer.inlineCallbacks
     def _terminate_dataset_agent(self):
         # TODO: add a timeout to this methods signature
+        # @todo: this method does not functionaly comply with documentation.  See "Dataset Agent Interface Notes"
+        #        to add necessary functionlity.
         log.debug("Entered _terminate_dataset_agent()")
         
         returncode = 0;
