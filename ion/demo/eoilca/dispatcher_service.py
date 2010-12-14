@@ -200,7 +200,7 @@ class DispatcherServiceClient(ServiceClient):
     it can make requests to start various data processing/modeling scripts
     """
     
-    DEFAULT_GET_SCRIPT = 'res/apps/ooi2unidata/get_ooi_dataset.sh'
+    DEFAULT_GET_SCRIPT = 'res/apps/eoi_dispatcher/get_ooi_dataset.sh'
     _next_id = 0
     
     def __init__(self, *args, **kwargs):
