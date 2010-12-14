@@ -117,7 +117,7 @@ class DispatcherServiceClient(ServiceClient):
     This test client effectually simulates notifications as if by the Scheduler Service.
     """
     
-    DEFAULT_GET_SCRIPT = 'res/apps/ooi2unidata/get_ooi_dataset.sh'
+    DEFAULT_GET_SCRIPT = 'res/apps/eoi_dispatcher/get_ooi_dataset.sh'
     _next_id = 0
     
     def __init__(self, *args, **kwargs):

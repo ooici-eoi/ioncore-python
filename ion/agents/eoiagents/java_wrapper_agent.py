@@ -350,7 +350,7 @@ class JavaWrapperAgent(ServiceProcess):
         '''
         # @todo: Generate jar_pathname dynamically
         # jar_pathname = "/Users/tlarocque/Development/Java/Workspace_eclipse/EOI_dev/build/TryAgent.jar"   # STAR #
-        jar_pathname = "res/apps/eoi_test/TryAgent.jar"   # STAR #
+        jar_pathname = "res/apps/eoi_ds_agent/DatasetAgent.jar"   # STAR #
         hostname = self.container.exchange_manager.message_space.connection.hostname
         exchange = self.container.exchange_manager.exchange_space.name
         wrapper = self.get_scoped_name("system", str(self.declare['name']))      # validate that 'system' is the correct scope
