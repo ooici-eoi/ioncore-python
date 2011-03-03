@@ -91,12 +91,18 @@ def _bootstrap_objects(*args, **kw):
     '''
     # Step 1: Define bootstrap objects and ids
     client_id = 'eoiclient'
-    client_ob = yield JavaAgentWrapperClient()
+    client_ob = JavaAgentWrapperClient()
     
     # Step 2: Return bootstrap objects as a tuple (id then object)
     app_obs = [
                 (client_id, client_ob)
               ]
+    
+    # @attention: The following yield is only necessary because this method is decorated
+    #             with inline callbacks, but has nothing to defer.  This empty yield
+    #             prevents twisted from erroring out during generator unwinding.  I'm
+    #             leaving this as inline callbacks for future implementation
+    yield
     defer.returnValue(app_obs)
     
     
